@@ -38,6 +38,11 @@ public class CustomerController {
         String hashedPassword = passwordEncoder.encode(inputBankAccount.getPassword());
         BankAccount bankAccount = new BankAccount(inputBankAccount.getAccountNumber(), inputBankAccount.getUsername(), hashedPassword);
         ResponseEntity<Account> account = getAccount(String.valueOf(bankAccount.getAccountNumber()));
+
+        if(bankAccount.isLocked()) {
+            return new ResponseEntity<BankAccount>(new BankAccount(), HttpStatus.LOCKED);
+        }
+
         if(account.getBody().getIban() == null) {
             if(inputBankAccount.getPassword().length() < 6) {
                 return new ResponseEntity<BankAccount>(new BankAccount(), HttpStatus.NOT_ACCEPTABLE);
@@ -63,15 +68,29 @@ public class CustomerController {
         BankAccount bankAccount1 = new BankAccount();
         if(bankAccount.isPresent()) {
             bankAccount1 = bankAccount.get();
+            Account acc = new Account(bankAccount1.getIban(), bankAccount1.getOwnerId());
+            if(bankAccount1.isLocked()) {
+                return new ResponseEntity<Account>(acc, HttpStatus.LOCKED);
+            }
+            if(bankAccount1.isLocked()) {
+                return new ResponseEntity<Account>(acc, HttpStatus.LOCKED);
+            } else {
+                return new ResponseEntity<Account>(acc, HttpStatus.OK);
+            }
         }
-        Account acc = new Account(bankAccount1.getIban(), bankAccount1.getOwnerId());
-        return new ResponseEntity<Account>(acc, HttpStatus.OK);
+        return new ResponseEntity<Account>(new Account(), HttpStatus.NO_CONTENT);
     }
 
     @RequestMapping(value="/authenticate",method= RequestMethod.POST,produces="application/json")
     public ResponseEntity<JwtResponse> authenticate(@RequestBody UserAuthentication userAuthentication) throws Exception {
         Long accountNumber = getAccountNumber(userAuthentication.getUsername());
-        authenticate(accountNumber.toString(), userAuthentication.getPassword());
+        Optional<BankAccount> bankAccount = repository
+                .findById(Long.valueOf(accountNumber));
+        BankAccount bankAccount1 = bankAccount.get();
+        if(bankAccount1.isLocked()) {
+            return new ResponseEntity<JwtResponse>(new JwtResponse(""), HttpStatus.LOCKED);
+        }
+        authenticate(accountNumber.toString(), userAuthentication.getPassword(), bankAccount1);
         final UserDetails userDetails = userDetailsService.loadUserByUsername(accountNumber.toString());
         final String token = jwtTokenUtil.generateToken(userDetails);
         return ResponseEntity.ok(new JwtResponse(token));
@@ -88,13 +107,24 @@ public class CustomerController {
         return accountNumber;
     }
 
-    private void authenticate(String username, String password) throws Exception {
+    private void authenticate(String username, String password,BankAccount bankAccount) throws Exception {
         try {
             authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(username, password));
+            bankAccount.setWrongAttempts(0);
         } catch (DisabledException e) {
+            incrementWrongAttempts(bankAccount);
             throw new Exception("USER_DISABLED", e);
         } catch (BadCredentialsException e) {
+            incrementWrongAttempts(bankAccount);
             throw new Exception("INVALID_CREDENTIALS", e);
         }
+    }
+
+    private void incrementWrongAttempts(BankAccount bankAccount) {
+        bankAccount.setWrongAttempts(bankAccount.getWrongAttempts() + 1);
+        if(bankAccount.getWrongAttempts() > 2) {
+            bankAccount.setLocked(true);
+        }
+        repository.save(bankAccount);
     }
 }

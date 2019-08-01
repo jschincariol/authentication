@@ -10,6 +10,8 @@ public class BankAccount {
     private String password;
     private String iban;
     private String ownerId;
+    private int wrongAttempts;
+    private boolean locked;
 
     public BankAccount() {
     }
@@ -20,6 +22,8 @@ public class BankAccount {
         this.password = password;
         this.iban = "NL24INGB" + accountNumber.toString() + "09";
         this.ownerId = username;
+        this.wrongAttempts = 0;
+        this.locked = false;
     }
 
     public Long getAccountNumber() {
@@ -54,4 +58,19 @@ public class BankAccount {
         return ownerId;
     }
 
+    public int getWrongAttempts() {
+        return wrongAttempts;
+    }
+
+    public void setWrongAttempts(int wrongAttempts) {
+        this.wrongAttempts = wrongAttempts;
+    }
+
+    public boolean isLocked() {
+        return locked;
+    }
+
+    public void setLocked(boolean locked) {
+        this.locked = locked;
+    }
 }
