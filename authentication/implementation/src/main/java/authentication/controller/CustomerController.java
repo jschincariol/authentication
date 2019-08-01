@@ -28,13 +28,32 @@ public class CustomerController {
     @Autowired
     private BankAccountRepository repository;
 
+    public CustomerController(BankAccountRepository repository) {
+        this.repository = repository;
+    }
+
     @RequestMapping(value="/createAccount",method= RequestMethod.POST,produces="application/json")
     public ResponseEntity<BankAccount> createBankAccount(@RequestBody BankAccount inputBankAccount){
         BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
         String hashedPassword = passwordEncoder.encode(inputBankAccount.getPassword());
         BankAccount bankAccount = new BankAccount(inputBankAccount.getAccountNumber(), inputBankAccount.getUsername(), hashedPassword);
-        repository.save(bankAccount);
-        return new ResponseEntity<BankAccount>(bankAccount, HttpStatus.OK);
+        ResponseEntity<Account> account = getAccount(String.valueOf(bankAccount.getAccountNumber()));
+        if(account.getBody().getIban() == null) {
+            if(inputBankAccount.getPassword().length() < 6) {
+                return new ResponseEntity<BankAccount>(new BankAccount(), HttpStatus.NOT_ACCEPTABLE);
+            }
+            repository.save(bankAccount);
+            return new ResponseEntity<BankAccount>(bankAccount, HttpStatus.OK);
+        }
+        else {
+            if(account.getBody().getOwnerId().equals(inputBankAccount.getUsername())) {
+                return new ResponseEntity<BankAccount>(new BankAccount(), HttpStatus.NOT_ACCEPTABLE);
+            } else if(inputBankAccount.getPassword().length() < 6) {
+                return new ResponseEntity<BankAccount>(new BankAccount(), HttpStatus.NOT_ACCEPTABLE);
+            }
+            repository.save(bankAccount);
+            return new ResponseEntity<BankAccount>(bankAccount, HttpStatus.OK);
+        }
     }
 
     @RequestMapping(value="/accounts/{account}",method= RequestMethod.GET,produces="application/json")
@@ -52,7 +71,6 @@ public class CustomerController {
     @RequestMapping(value="/authenticate",method= RequestMethod.POST,produces="application/json")
     public ResponseEntity<JwtResponse> authenticate(@RequestBody UserAuthentication userAuthentication) throws Exception {
         Long accountNumber = getAccountNumber(userAuthentication.getUsername());
-
         authenticate(accountNumber.toString(), userAuthentication.getPassword());
         final UserDetails userDetails = userDetailsService.loadUserByUsername(accountNumber.toString());
         final String token = jwtTokenUtil.generateToken(userDetails);

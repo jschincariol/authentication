@@ -19,7 +19,7 @@ public class BankAccount {
         this.username = username;
         this.password = password;
         this.iban = "NL24INGB" + accountNumber.toString() + "09";
-        this.ownerId = "c3629d83-95f7-4966-9b67-76b13fe2cd5a";
+        this.ownerId = username;
     }
 
     public Long getAccountNumber() {
