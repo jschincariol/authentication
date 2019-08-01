@@ -1,13 +1,8 @@
 package authentication.controller;
 
 import authentication.config.JwtTokenUtil;
-import authentication.model.BankAccount;
-import authentication.model.JwtResponse;
-import authentication.model.UserAuthentication;
+import authentication.model.*;
 import authentication.service.JWTUserDetailsService;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,10 +11,10 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Optional;
 
 @RestController
 public class CustomerController {
@@ -30,27 +25,49 @@ public class CustomerController {
     @Autowired
     private JWTUserDetailsService userDetailsService;
 
-    @ApiOperation(value="get customer",response=BankAccount.class)
-    @ApiResponses(value={
-            @ApiResponse(code=200,message="Customer Details Retrieved",response=BankAccount.class),
-            @ApiResponse(code=500,message="Internal Server Error"),
-            @ApiResponse(code=404,message="Customer not found")
-    })
+    @Autowired
+    private BankAccountRepository repository;
+
     @RequestMapping(value="/createAccount",method= RequestMethod.POST,produces="application/json")
     public ResponseEntity<BankAccount> createBankAccount(@RequestBody BankAccount inputBankAccount){
-        BankAccount cust = new BankAccount();
-        cust.setAccountNumber(inputBankAccount.getAccountNumber());
-        cust.setUsername(inputBankAccount.getUsername());
-        cust.setPassword(inputBankAccount.getPassword());
-        return new ResponseEntity<BankAccount>(cust, HttpStatus.OK);
+        BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+        String hashedPassword = passwordEncoder.encode(inputBankAccount.getPassword());
+        BankAccount bankAccount = new BankAccount(inputBankAccount.getAccountNumber(), inputBankAccount.getUsername(), hashedPassword);
+        repository.save(bankAccount);
+        return new ResponseEntity<BankAccount>(bankAccount, HttpStatus.OK);
+    }
+
+    @RequestMapping(value="/accounts/{account}",method= RequestMethod.GET,produces="application/json")
+    public ResponseEntity<Account> getAccount(@PathVariable("account") String account){
+        Optional<BankAccount> bankAccount = repository
+                .findById(Long.valueOf(account));
+        BankAccount bankAccount1 = new BankAccount();
+        if(bankAccount.isPresent()) {
+            bankAccount1 = bankAccount.get();
+        }
+        Account acc = new Account(bankAccount1.getIban(), bankAccount1.getOwnerId());
+        return new ResponseEntity<Account>(acc, HttpStatus.OK);
     }
 
     @RequestMapping(value="/authenticate",method= RequestMethod.POST,produces="application/json")
     public ResponseEntity<JwtResponse> authenticate(@RequestBody UserAuthentication userAuthentication) throws Exception {
-        authenticate(userAuthentication.getUsername(), userAuthentication.getPassword());
-        final UserDetails userDetails = userDetailsService.loadUserByUsername(userAuthentication.getUsername());
+        Long accountNumber = getAccountNumber(userAuthentication.getUsername());
+
+        authenticate(accountNumber.toString(), userAuthentication.getPassword());
+        final UserDetails userDetails = userDetailsService.loadUserByUsername(accountNumber.toString());
         final String token = jwtTokenUtil.generateToken(userDetails);
         return ResponseEntity.ok(new JwtResponse(token));
+    }
+
+    private Long getAccountNumber(String username) {
+        Long accountNumber = Long.valueOf(0);
+        Iterable<BankAccount> all = repository.findAll();
+        for (BankAccount ba: all) {
+            if(ba.getUsername().equals(username)) {
+                accountNumber = ba.getAccountNumber();
+            }
+        }
+        return accountNumber;
     }
 
     private void authenticate(String username, String password) throws Exception {

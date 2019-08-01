@@ -9,6 +9,7 @@ public class UserAuthentication implements Serializable {
     private String username;
     private String password;
     private Jwts jwts;
+
     public UserAuthentication() {
     }
 
