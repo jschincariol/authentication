@@ -28,8 +28,12 @@ public class CustomerController {
     @Autowired
     private BankAccountRepository repository;
 
-    public CustomerController(BankAccountRepository repository) {
+
+    public CustomerController(BankAccountRepository repository, AuthenticationManager authenticationManager, JWTUserDetailsService userDetailsService, JwtTokenUtil jwtTokenUtil) {
         this.repository = repository;
+        this.authenticationManager = authenticationManager;
+        this.userDetailsService = userDetailsService;
+        this.jwtTokenUtil = jwtTokenUtil;
     }
 
     @RequestMapping(value="/createAccount",method= RequestMethod.POST,produces="application/json")
@@ -49,8 +53,7 @@ public class CustomerController {
             }
             repository.save(bankAccount);
             return new ResponseEntity<BankAccount>(bankAccount, HttpStatus.OK);
-        }
-        else {
+        } else {
             if(account.getBody().getOwnerId().equals(inputBankAccount.getUsername())) {
                 return new ResponseEntity<BankAccount>(new BankAccount(), HttpStatus.NOT_ACCEPTABLE);
             } else if(inputBankAccount.getPassword().length() < 6) {
